@@ -6,10 +6,10 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 # Change stm32f429zi to your chip name, if necessary.
-embassy-stm32 = { version = "0.3.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt", "stm32f407ve", "unstable-pac", "memory-x", "time-driver-tim4", "exti", "chrono"] }
+embassy-stm32 = { version = "0.4.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt", "stm32f407ve", "unstable-pac", "memory-x", "time-driver-tim4", "exti", "chrono"] }
 embassy-sync = { version = "0.7.1", git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
-embassy-executor = { version = "0.8.0", git = "https://github.com/embassy-rs/embassy", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
-embassy-time = { version = "0.4.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
+embassy-executor = { version = "0.9.1", git = "https://github.com/embassy-rs/embassy", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
+embassy-time = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
 embassy-usb = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt" ] }
 embassy-net = { version = "0.7.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt", "tcp", "dhcpv4", "medium-ethernet", ] }
 embassy-net-wiznet = { version = "0.2.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
@@ -34,6 +34,7 @@ micromath = "2.0.0"
 usbd-hid = "0.8.1"
 static_cell = "2"
 chrono = { version = "^0.4", default-features = false}
+spi-memory = "0.2.0"
 
 [profile.release]
 debug = 2
