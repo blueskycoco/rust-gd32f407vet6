@@ -6,12 +6,21 @@ use embassy_executor::Spawner;
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::spi::{Config, Spi};
 use embassy_stm32::time::Hertz;
+use embassy_stm32::usart::BufferedUart;
+use embassy_stm32::{bind_interrupts, peripherals, usart};
 use embassy_time::Timer;
-use spi_memory::prelude::*;
+use embedded_io_async::Write;
 use spi_memory::series25::Flash;
+use spi_memory::Read;
+use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
-const SIZE_IN_BYTES: u32 = (64 * 1024 * 1024) / 8;
+//const SIZE_IN_BYTES: u32 = (64 * 1024 * 1024) / 8;
+
+bind_interrupts!(struct Irqs {
+    USART1 => usart::BufferedInterruptHandler<peripherals::USART1>;
+});
+
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     //let p = embassy_stm32::init(Default::default());
@@ -64,28 +73,41 @@ async fn main(_spawner: Spawner) {
     let mut flash = Flash::init(spi, cs).unwrap();
     let id = flash.read_jedec_id().unwrap();
     info!(
-        "spi flash id{:?} {:?} {:?}",
+        "spi flash id {:?} {:?} {:?}",
         id.mfr_code(),
         id.continuation_count(),
         id.device_id()
     );
 
-    let mut addr = 0;
+    let addr = 0;
     const BUF: usize = 32;
     let mut buf = [0; BUF];
+    //let buf1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
     //while addr < SIZE_IN_BYTES {
+    //flash.write(buf1, addr, 1);
     flash.read(addr, &mut buf).unwrap();
-    info!("{:?}", buf);
 
+    let mut config = usart::Config::default();
+    config.baudrate = 921_600;
+    static TX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
+    let tx_buf = &mut TX_BUF.init([0; 128])[..];
+    static RX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
+    let rx_buf = &mut RX_BUF.init([0; 128])[..];
+    let usart = BufferedUart::new(p.USART1, p.PA10, p.PA9, tx_buf, rx_buf, Irqs, config).unwrap();
+    let (mut usr_tx, _usr_rx) = usart.split();
+    info!("{:?}", buf);
+    let _ = usr_tx.write_all(&buf).await;
     //    addr += BUF as u32;
     //}
     loop {
         //info!("high");
+        usr_tx.write_all("high\r\n".as_bytes()).await;
         led.set_high();
         Timer::after_millis(300).await;
 
         //info!("low");
+        usr_tx.write_all("low\r\n".as_bytes()).await;
         led.set_low();
         Timer::after_millis(300).await;
     }
