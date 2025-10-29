@@ -101,12 +101,12 @@ async fn main(_spawner: Spawner) {
     //    addr += BUF as u32;
     //}
     loop {
-        //info!("high");
+        info!("high");
         usr_tx.write_all("high\r\n".as_bytes()).await;
         led.set_high();
         Timer::after_millis(300).await;
 
-        //info!("low");
+        info!("low");
         usr_tx.write_all("low\r\n".as_bytes()).await;
         led.set_low();
         Timer::after_millis(300).await;
