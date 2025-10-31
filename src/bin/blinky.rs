@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+#[cfg(feature = "defmt")]
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_stm32::gpio::{Level, Output, Speed};
@@ -13,8 +14,10 @@ use embedded_io_async::Write;
 use spi_memory::series25::Flash;
 use spi_memory::Read;
 use static_cell::StaticCell;
-use {defmt_rtt as _, panic_probe as _};
-
+#[cfg(feature = "defmt")]
+use {defmt_rtt as _};
+//use panic_reset as _;
+use panic_probe as _;
 //const SIZE_IN_BYTES: u32 = (64 * 1024 * 1024) / 8;
 
 bind_interrupts!(struct Irqs {
@@ -60,6 +63,7 @@ async fn main(_spawner: Spawner) {
         config
     };
     let p = embassy_stm32::init(config);
+#[cfg(feature = "defmt")]
     info!("Hello World!");
 
     let mut led = Output::new(p.PC15, Level::High, Speed::Low);
@@ -72,6 +76,7 @@ async fn main(_spawner: Spawner) {
     let cs = Output::new(p.PB9, Level::High, Speed::VeryHigh);
     let mut flash = Flash::init(spi, cs).unwrap();
     let id = flash.read_jedec_id().unwrap();
+#[cfg(feature = "defmt")]
     info!(
         "spi flash id {:?} {:?} {:?}",
         id.mfr_code(),
@@ -96,16 +101,19 @@ async fn main(_spawner: Spawner) {
     let rx_buf = &mut RX_BUF.init([0; 128])[..];
     let usart = BufferedUart::new(p.USART1, p.PA10, p.PA9, tx_buf, rx_buf, Irqs, config).unwrap();
     let (mut usr_tx, _usr_rx) = usart.split();
+#[cfg(feature = "defmt")]
     info!("{:?}", buf);
     let _ = usr_tx.write_all(&buf).await;
     //    addr += BUF as u32;
     //}
     loop {
+#[cfg(feature = "defmt")]
         info!("high");
         usr_tx.write_all("high\r\n".as_bytes()).await;
         led.set_high();
         Timer::after_millis(300).await;
 
+#[cfg(feature = "defmt")]
         info!("low");
         usr_tx.write_all("low\r\n".as_bytes()).await;
         led.set_low();

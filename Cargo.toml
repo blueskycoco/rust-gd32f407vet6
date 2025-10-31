@@ -6,17 +6,17 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 # Change stm32f429zi to your chip name, if necessary.
-embassy-stm32 = { version = "0.4.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt", "stm32f407ve", "unstable-pac", "memory-x", "time-driver-tim4", "exti", "chrono"] }
-embassy-sync = { version = "0.7.1", git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
-embassy-executor = { version = "0.9.1", git = "https://github.com/embassy-rs/embassy", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
-embassy-time = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
-embassy-usb = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt" ] }
-embassy-net = { version = "0.7.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt", "tcp", "dhcpv4", "medium-ethernet", ] }
-embassy-net-wiznet = { version = "0.2.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
+embassy-stm32 = { version = "0.4.0", git = "https://github.com/embassy-rs/embassy", features = ["stm32f407ve", "unstable-pac", "memory-x", "time-driver-tim4", "exti", "chrono"] }
+embassy-sync = { version = "0.7.1", git = "https://github.com/embassy-rs/embassy", features = [] }
+embassy-executor = { version = "0.9.1", git = "https://github.com/embassy-rs/embassy", features = ["arch-cortex-m", "executor-thread", "executor-interrupt"] }
+embassy-time = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy", features = ["tick-hz-32_768"] }
+embassy-usb = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy", features = [ ] }
+embassy-net = { version = "0.7.0", git = "https://github.com/embassy-rs/embassy", features = [ "tcp", "dhcpv4", "medium-ethernet", ] }
+embassy-net-wiznet = { version = "0.2.0", git = "https://github.com/embassy-rs/embassy", features = [] }
 embassy-futures = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy" }
 
-defmt = "1.0.1"
-defmt-rtt = "1.0.0"
+defmt = { version = "1.0.1", optional = true }
+defmt-rtt = { version = "1.0.0", optional = true }
 
 cortex-m = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = "0.7.0"
@@ -36,5 +36,18 @@ static_cell = "2"
 chrono = { version = "^0.4", default-features = false}
 spi-memory = "0.2.0"
 
+[features]
+defmt = [
+      "dep:defmt",
+      "dep:defmt-rtt",
+      "embassy-stm32/defmt",
+      "embassy-usb/defmt",
+      "embassy-executor/defmt",
+      "embassy-time/defmt",
+      "embassy-time/defmt-timestamp-uptime",
+      "embassy-sync/defmt",
+      "embassy-net/defmt",
+      "embassy-net-wiznet/defmt"
+]
 [profile.release]
 debug = 2
