@@ -27,7 +27,7 @@ use embassy_boot_stm32::BlockingFirmwareUpdater;
 use core::cell::RefCell;
 use heapless::Vec;
 #[cfg(feature = "defmt")]
-use {defmt_rtt as _};
+use {defmt_serial as _};
 //use panic_reset as _;
 use panic_probe as _;
 //const SIZE_IN_BYTES: u32 = (64 * 1024 * 1024) / 8;
@@ -38,6 +38,7 @@ bind_interrupts!(struct Irqs_Eth {
 });
 
 type Device = Ethernet<'static, ETH, GenericPhy>;
+static SERIAL: StaticCell<embassy_stm32::usart::BufferedUart> = StaticCell::new();
 
 #[embassy_executor::task]
 async fn net_task(mut runner: embassy_net::Runner<'static, Device>) -> ! {
@@ -123,10 +124,10 @@ async fn main(spawner: Spawner) {
     static RX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; 128])[..];
     let usart = BufferedUart::new(p.USART1, p.PA10, p.PA9, tx_buf, rx_buf, Irqs, config).unwrap();
-    let (mut usr_tx, _usr_rx) = usart.split();
+    //let (mut usr_tx, _usr_rx) = usart.split();
 #[cfg(feature = "defmt")]
     info!("{:?}", buf);
-    let _ = usr_tx.write_all(&buf).await;
+    //let _ = usr_tx.write_all(&buf).await;
     //    addr += BUF as u32;
     //}
     let layout = STM32Flash::new_blocking(p.FLASH).into_blocking_regions();
@@ -188,7 +189,8 @@ async fn main(spawner: Spawner) {
     let mut rx_buffer = [0; 4096];
     let mut tx_buffer = [0; 4096];
     let mut buf = [0; 4096];
-
+    #[cfg(feature = "defmt")]
+    defmt_serial::defmt_serial(SERIAL.init(usart));
     loop {
         let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
         socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
