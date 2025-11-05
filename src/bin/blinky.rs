@@ -87,6 +87,15 @@ async fn main(spawner: Spawner) {
         config
     };
     let p = embassy_stm32::init(config);
+    let mut config = usart::Config::default();
+    config.baudrate = 115_200;
+    static TX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
+    let tx_buf = &mut TX_BUF.init([0; 128])[..];
+    static RX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
+    let rx_buf = &mut RX_BUF.init([0; 128])[..];
+    let usart = BufferedUart::new(p.USART1, p.PA10, p.PA9, tx_buf, rx_buf, Irqs, config).unwrap();
+    #[cfg(feature = "defmt")]
+    defmt_serial::defmt_serial(SERIAL.init(usart));
 #[cfg(feature = "defmt")]
     info!("Hello World!");
 
@@ -117,13 +126,6 @@ async fn main(spawner: Spawner) {
     //flash.write(buf1, addr, 1);
     flash.read(addr, &mut buf).unwrap();
 
-    let mut config = usart::Config::default();
-    config.baudrate = 115_200;
-    static TX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
-    let tx_buf = &mut TX_BUF.init([0; 128])[..];
-    static RX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
-    let rx_buf = &mut RX_BUF.init([0; 128])[..];
-    let usart = BufferedUart::new(p.USART1, p.PA10, p.PA9, tx_buf, rx_buf, Irqs, config).unwrap();
     //let (mut usr_tx, _usr_rx) = usart.split();
 #[cfg(feature = "defmt")]
     info!("{:?}", buf);
@@ -189,8 +191,6 @@ async fn main(spawner: Spawner) {
     let mut rx_buffer = [0; 4096];
     let mut tx_buffer = [0; 4096];
     let mut buf = [0; 4096];
-    #[cfg(feature = "defmt")]
-    defmt_serial::defmt_serial(SERIAL.init(usart));
     loop {
         let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
         socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
