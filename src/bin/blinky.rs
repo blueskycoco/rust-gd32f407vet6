@@ -14,6 +14,12 @@ use embedded_io_async::Write;
 use spi_memory::series25::Flash;
 use spi_memory::Read;
 use static_cell::StaticCell;
+use embassy_stm32::flash::{Flash as STM32Flash, WRITE_SIZE};
+use embassy_boot_stm32::{AlignedBuffer, FirmwareUpdater, FirmwareUpdaterConfig};
+use embassy_sync::blocking_mutex::Mutex;
+use embassy_embedded_hal::adapter::BlockingAsync;
+use embassy_boot_stm32::BlockingFirmwareUpdater;
+use core::cell::RefCell;
 #[cfg(feature = "defmt")]
 use {defmt_rtt as _};
 //use panic_reset as _;
@@ -94,7 +100,7 @@ async fn main(_spawner: Spawner) {
     flash.read(addr, &mut buf).unwrap();
 
     let mut config = usart::Config::default();
-    config.baudrate = 921_600;
+    config.baudrate = 115_200;
     static TX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
     let tx_buf = &mut TX_BUF.init([0; 128])[..];
     static RX_BUF: StaticCell<[u8; 128]> = StaticCell::new();
@@ -106,17 +112,24 @@ async fn main(_spawner: Spawner) {
     let _ = usr_tx.write_all(&buf).await;
     //    addr += BUF as u32;
     //}
+    let layout = STM32Flash::new_blocking(p.FLASH).into_blocking_regions();
+    let flash_state = Mutex::new(RefCell::new(layout.bank1_region1));
+    let flash_active_dfu = Mutex::new(RefCell::new(layout.bank1_region3));
+    let config = FirmwareUpdaterConfig::from_linkerfile_blocking(&flash_active_dfu, &flash_state);
+    let mut magic = AlignedBuffer([0; WRITE_SIZE]);
+    let mut firmware_state = BlockingFirmwareUpdater::new(config, &mut magic.0);
+    firmware_state.mark_booted().expect("Failed to mark booted");
     loop {
 #[cfg(feature = "defmt")]
         info!("high");
         usr_tx.write_all("high\r\n".as_bytes()).await;
         led.set_high();
-        Timer::after_millis(300).await;
+        Timer::after_millis(1000).await;
 
 #[cfg(feature = "defmt")]
         info!("low");
         usr_tx.write_all("low\r\n".as_bytes()).await;
         led.set_low();
-        Timer::after_millis(300).await;
+        Timer::after_millis(1000).await;
     }
 }
