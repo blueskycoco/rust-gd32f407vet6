@@ -4,11 +4,16 @@
 #[cfg(feature = "defmt")]
 use defmt::*;
 use embassy_executor::Spawner;
+use embassy_net::tcp::TcpSocket;
+use embassy_net::{Ipv4Address, Ipv4Cidr, StackResources};
+use embassy_stm32::eth::{Ethernet, GenericPhy, PacketQueue};
+use embassy_stm32::peripherals::ETH;
+use embassy_stm32::rng::Rng;
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::spi::{Config, Spi};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::usart::BufferedUart;
-use embassy_stm32::{bind_interrupts, peripherals, usart};
+use embassy_stm32::{bind_interrupts, peripherals, usart, rng, eth};
 use embassy_time::Timer;
 use embedded_io_async::Write;
 use spi_memory::series25::Flash;
@@ -20,18 +25,30 @@ use embassy_sync::blocking_mutex::Mutex;
 use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_boot_stm32::BlockingFirmwareUpdater;
 use core::cell::RefCell;
+use heapless::Vec;
 #[cfg(feature = "defmt")]
 use {defmt_rtt as _};
 //use panic_reset as _;
 use panic_probe as _;
 //const SIZE_IN_BYTES: u32 = (64 * 1024 * 1024) / 8;
 
+bind_interrupts!(struct Irqs_Eth {
+    ETH => eth::InterruptHandler;
+    RNG => rng::InterruptHandler<peripherals::RNG>;
+});
+
+type Device = Ethernet<'static, ETH, GenericPhy>;
+
+#[embassy_executor::task]
+async fn net_task(mut runner: embassy_net::Runner<'static, Device>) -> ! {
+    runner.run().await
+}
 bind_interrupts!(struct Irqs {
     USART1 => usart::BufferedInterruptHandler<peripherals::USART1>;
 });
 
 #[embassy_executor::main]
-async fn main(_spawner: Spawner) {
+async fn main(spawner: Spawner) {
     //let p = embassy_stm32::init(Default::default());
     let config = {
         use embassy_stm32::rcc::*;
@@ -119,17 +136,114 @@ async fn main(_spawner: Spawner) {
     let mut magic = AlignedBuffer([0; WRITE_SIZE]);
     let mut firmware_state = BlockingFirmwareUpdater::new(config, &mut magic.0);
     firmware_state.mark_booted().expect("Failed to mark booted");
+    // Generate random seed.
+    let mut phy_rst = Output::new(p.PD0, Level::High, Speed::Low);
+    phy_rst.set_high();
+    let mut rng = Rng::new(p.RNG, Irqs_Eth);
+    let mut seed = [0; 8];
+    let _ = rng.async_fill_bytes(&mut seed).await;
+    let seed = u64::from_le_bytes(seed);
+
+    let mac_addr = [0x00, 0x00, 0xDE, 0xAD, 0xBE, 0xEF];
+
+    static PACKETS: StaticCell<PacketQueue<4, 4>> = StaticCell::new();
+    let device = Ethernet::new(
+        PACKETS.init(PacketQueue::<4, 4>::new()),
+        p.ETH,
+        Irqs_Eth,
+        p.PA1,
+        p.PA2,
+        p.PC1,
+        p.PA7,
+        p.PC4,
+        p.PC5,
+        p.PB12,
+        p.PB13,
+        p.PB11,
+        GenericPhy::new_auto(),
+        mac_addr,
+    );
+
+    //let config = embassy_net::Config::dhcpv4(Default::default());
+    let config = embassy_net::Config::ipv4_static(embassy_net::StaticConfigV4 {
+        address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 2, 34), 24),
+        dns_servers: Vec::new(),
+        gateway: Some(Ipv4Address::new(192, 168, 2, 1)),
+    });
+
+    // Init network stack
+    static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+    let (stack, runner) = embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed);
+
+    // Launch network task
+    spawner.spawn(net_task(runner).unwrap());
+
+    // Ensure DHCP configuration is up before trying connect
+    stack.wait_config_up().await;
+
+    #[cfg(feature = "defmt")]
+    info!("Network task initialized");
+
+    // Then we can use it!
+    let mut rx_buffer = [0; 4096];
+    let mut tx_buffer = [0; 4096];
+    let mut buf = [0; 4096];
+
     loop {
+        let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
+        socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
+
+        #[cfg(feature = "defmt")]
+        info!("Listening on TCP:1234...");
+        if let Err(e) = socket.accept(1234).await {
+            #[cfg(feature = "defmt")]
+            warn!("accept error: {:?}", e);
+            continue;
+        }
+
+        #[cfg(feature = "defmt")]
+        info!("Received connection from {:?}", socket.remote_endpoint());
+
+        loop {
+            let n = match socket.read(&mut buf).await {
+                Ok(0) => {
+                    #[cfg(feature = "defmt")]
+                    warn!("read EOF");
+                    break;
+                }
+                Ok(n) => n,
+                Err(e) => {
+                    #[cfg(feature = "defmt")]
+                    warn!("read error: {:?}", e);
+                    break;
+                }
+            };
+
+            led.toggle();
+            #[cfg(feature = "defmt")]
+            info!("rxd {:02x}", &buf[..n]);
+
+            match socket.write_all(&buf[..n]).await {
+                Ok(()) => {}
+                Err(e) => {
+                    #[cfg(feature = "defmt")]
+                    warn!("write error: {:?}", e);
+                    break;
+                }
+            };
+        }
+    }
+/*    loop {
 #[cfg(feature = "defmt")]
         info!("high");
         usr_tx.write_all("high\r\n".as_bytes()).await;
         led.set_high();
-        Timer::after_millis(1000).await;
+        Timer::after_millis(100).await;
 
 #[cfg(feature = "defmt")]
         info!("low");
         usr_tx.write_all("low\r\n".as_bytes()).await;
         led.set_low();
-        Timer::after_millis(1000).await;
-    }
+        Timer::after_millis(100).await;
+    }*/
 }
