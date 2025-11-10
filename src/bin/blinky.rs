@@ -6,8 +6,7 @@ use core::cell::RefCell;
 
 #[cfg(feature = "defmt")]
 use defmt_serial as _;
-use embassy_boot_stm32::{AlignedBuffer, BlockingFirmwareUpdater, FirmwareUpdater, FirmwareUpdaterConfig};
-use embassy_embedded_hal::adapter::BlockingAsync;
+use embassy_boot_stm32::{AlignedBuffer, BlockingFirmwareUpdater, FirmwareUpdaterConfig};
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{Ipv4Address, Ipv4Cidr, StackResources};
@@ -21,7 +20,6 @@ use embassy_stm32::time::Hertz;
 use embassy_stm32::usart::BufferedUart;
 use embassy_stm32::{bind_interrupts, eth, peripherals, rng, usart};
 use embassy_sync::blocking_mutex::Mutex;
-use embassy_time::Timer;
 use embedded_io_async::Write;
 use heapless::Vec;
 //use panic_reset as _;
@@ -31,7 +29,7 @@ use spi_memory::Read;
 use static_cell::StaticCell;
 //const SIZE_IN_BYTES: u32 = (64 * 1024 * 1024) / 8;
 
-bind_interrupts!(struct Irqs_Eth {
+bind_interrupts!(struct IrqsEth {
     ETH => eth::InterruptHandler;
     RNG => rng::InterruptHandler<peripherals::RNG>;
 });
@@ -138,7 +136,7 @@ async fn main(spawner: Spawner) {
     // Generate random seed.
     let mut phy_rst = Output::new(p.PD0, Level::High, Speed::Low);
     phy_rst.set_high();
-    let mut rng = Rng::new(p.RNG, Irqs_Eth);
+    let mut rng = Rng::new(p.RNG, IrqsEth);
     let mut seed = [0; 8];
     let _ = rng.async_fill_bytes(&mut seed).await;
     let seed = u64::from_le_bytes(seed);
@@ -149,7 +147,7 @@ async fn main(spawner: Spawner) {
     let device = Ethernet::new(
         PACKETS.init(PacketQueue::<4, 4>::new()),
         p.ETH,
-        Irqs_Eth,
+        IrqsEth,
         p.PA1,
         p.PA2,
         p.PC1,
