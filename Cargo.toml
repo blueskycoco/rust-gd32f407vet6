@@ -37,6 +37,7 @@ static_cell = "2"
 chrono = { version = "^0.4", default-features = false}
 spi-memory = "0.2.0"
 defmt-serial = { version = "0.10.0", optional = true }
+log = { version = "0.4.14", optional = true }
 
 [features]
 defmt = [
@@ -53,6 +54,7 @@ defmt = [
       "embassy-net/defmt",
       "embassy-net-wiznet/defmt"
 ]
+log = ["dep:log"]
 [profile.release]
 codegen-units = 1
 debug = 2

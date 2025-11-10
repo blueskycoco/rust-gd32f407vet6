@@ -1,35 +1,34 @@
 #![no_std]
 #![no_main]
 
+mod fmt;
+use core::cell::RefCell;
+
 #[cfg(feature = "defmt")]
-use defmt::*;
+use defmt_serial as _;
+use embassy_boot_stm32::{AlignedBuffer, BlockingFirmwareUpdater, FirmwareUpdater, FirmwareUpdaterConfig};
+use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{Ipv4Address, Ipv4Cidr, StackResources};
 use embassy_stm32::eth::{Ethernet, GenericPhy, PacketQueue};
+use embassy_stm32::flash::{Flash as STM32Flash, WRITE_SIZE};
+use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::peripherals::ETH;
 use embassy_stm32::rng::Rng;
-use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::spi::{Config, Spi};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::usart::BufferedUart;
-use embassy_stm32::{bind_interrupts, peripherals, usart, rng, eth};
+use embassy_stm32::{bind_interrupts, eth, peripherals, rng, usart};
+use embassy_sync::blocking_mutex::Mutex;
 use embassy_time::Timer;
 use embedded_io_async::Write;
+use heapless::Vec;
+//use panic_reset as _;
+use panic_probe as _;
 use spi_memory::series25::Flash;
 use spi_memory::Read;
 use static_cell::StaticCell;
-use embassy_stm32::flash::{Flash as STM32Flash, WRITE_SIZE};
-use embassy_boot_stm32::{AlignedBuffer, FirmwareUpdater, FirmwareUpdaterConfig};
-use embassy_sync::blocking_mutex::Mutex;
-use embassy_embedded_hal::adapter::BlockingAsync;
-use embassy_boot_stm32::BlockingFirmwareUpdater;
-use core::cell::RefCell;
-use heapless::Vec;
-#[cfg(feature = "defmt")]
-use {defmt_serial as _};
-//use panic_reset as _;
-use panic_probe as _;
 //const SIZE_IN_BYTES: u32 = (64 * 1024 * 1024) / 8;
 
 bind_interrupts!(struct Irqs_Eth {
@@ -96,8 +95,7 @@ async fn main(spawner: Spawner) {
     let usart = BufferedUart::new(p.USART1, p.PA10, p.PA9, tx_buf, rx_buf, Irqs, config).unwrap();
     #[cfg(feature = "defmt")]
     defmt_serial::defmt_serial(SERIAL.init(usart));
-#[cfg(feature = "defmt")]
-    info!("Hello World!");
+    info!("Hello World! 2025-11-10 14:45");
 
     let mut led = Output::new(p.PC15, Level::High, Speed::Low);
 
@@ -109,7 +107,6 @@ async fn main(spawner: Spawner) {
     let cs = Output::new(p.PB9, Level::High, Speed::VeryHigh);
     let mut flash = Flash::init(spi, cs).unwrap();
     let id = flash.read_jedec_id().unwrap();
-#[cfg(feature = "defmt")]
     info!(
         "spi flash id {:?} {:?} {:?}",
         id.mfr_code(),
@@ -127,7 +124,6 @@ async fn main(spawner: Spawner) {
     flash.read(addr, &mut buf).unwrap();
 
     //let (mut usr_tx, _usr_rx) = usart.split();
-#[cfg(feature = "defmt")]
     info!("{:?}", buf);
     //let _ = usr_tx.write_all(&buf).await;
     //    addr += BUF as u32;
@@ -184,7 +180,6 @@ async fn main(spawner: Spawner) {
     // Ensure DHCP configuration is up before trying connect
     stack.wait_config_up().await;
 
-    #[cfg(feature = "defmt")]
     info!("Network task initialized");
 
     // Then we can use it!
@@ -195,57 +190,37 @@ async fn main(spawner: Spawner) {
         let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
         socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
 
-        #[cfg(feature = "defmt")]
         info!("Listening on TCP:1234...");
         if let Err(e) = socket.accept(1234).await {
-            #[cfg(feature = "defmt")]
             warn!("accept error: {:?}", e);
             continue;
         }
 
-        #[cfg(feature = "defmt")]
         info!("Received connection from {:?}", socket.remote_endpoint());
 
         loop {
             let n = match socket.read(&mut buf).await {
                 Ok(0) => {
-                    #[cfg(feature = "defmt")]
                     warn!("read EOF");
                     break;
                 }
                 Ok(n) => n,
                 Err(e) => {
-                    #[cfg(feature = "defmt")]
                     warn!("read error: {:?}", e);
                     break;
                 }
             };
 
             led.toggle();
-            #[cfg(feature = "defmt")]
             info!("rxd {:02x}", &buf[..n]);
 
             match socket.write_all(&buf[..n]).await {
                 Ok(()) => {}
                 Err(e) => {
-                    #[cfg(feature = "defmt")]
                     warn!("write error: {:?}", e);
                     break;
                 }
             };
         }
     }
-/*    loop {
-#[cfg(feature = "defmt")]
-        info!("high");
-        usr_tx.write_all("high\r\n".as_bytes()).await;
-        led.set_high();
-        Timer::after_millis(100).await;
-
-#[cfg(feature = "defmt")]
-        info!("low");
-        usr_tx.write_all("low\r\n".as_bytes()).await;
-        led.set_low();
-        Timer::after_millis(100).await;
-    }*/
 }
